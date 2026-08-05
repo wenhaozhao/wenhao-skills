@@ -1,0 +1,4 @@
+interface:
+  display_name: "Call Worker"
+  short_description: "Request approval before worker or code review"
+  default_prompt: "Use $call-worker to assess whether this task should use a worker or code review and request my approval."

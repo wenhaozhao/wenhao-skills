@@ -1,57 +1,94 @@
 ---
 name: call-worker
-description: Assess whether a task would benefit from luna-worker, sol-worker, or the wenhao-skills:code-review skill; request explicit user authorization before using any of them; and execute only the approved scope. Use when the main agent recommends delegation or formal review, or when the user invokes call-worker to evaluate those options. Invoking this skill alone is not authorization.
+description: Choose the execution mode, model, and reasoning effort for a task; assess whether work should stay with the main agent, move to a dedicated Codex task, use luna-worker or sol-worker, or invoke wenhao-skills:code-review; request explicit user authorization before delegation or review; and execute only the approved scope. Use when the main agent recommends delegation or formal review, or when the user invokes call-worker to evaluate those options. Invoking this skill alone is not authorization.
 ---
 
 # Call Worker
 
-Keep decision authority with the user. Treat automatic and manual skill invocation as a request to assess options, not as permission to execute them.
+Keep decision authority with the user. Treat automatic and manual invocation as evaluation, not permission to delegate or review.
 
 ## Assess
 
-Perform only read-only investigation needed to make a recommendation. Do not launch, prewarm, test, or dispatch a sub-agent before authorization.
+Perform only the read-only investigation needed to choose all of:
 
-Recommend one or more options only when their benefit exceeds their coordination cost:
+1. execution mode;
+2. model;
+3. reasoning effort;
+4. whether `wenhao-skills:code-review` is warranted.
 
-- **Main agent:** Prefer for read-only work, small changes, and tasks the main agent can safely verify.
-- **`luna-worker`:** Recommend for bounded, local, low- or medium-risk implementation.
-- **`sol-worker`:** Recommend for high-complexity, architectural, cross-protocol, security-critical, production, device, or otherwise high-risk work.
-- **`wenhao-skills:code-review`:** Recommend when an independent formal review of repository changes is useful.
+Never leave model or reasoning effort implicit. If work stays in the current thread, confirm its active combination is suitable or recommend a switch before execution.
 
-Respect more specific project instructions. If they require a worker or review, explain the requirement and request authorization; do not bypass the gate or continue restricted work without approval.
+Record every decision with this shape:
+
+```yaml
+execution_profile:
+  mode: main-agent | dedicated-thread | luna-worker | sol-worker
+  model: exact-model
+  reasoning_effort: exact-effort
+  selection_basis: concise-reason
+  profile_authorization:
+    required: true-or-false
+    source: whitelist | current-ui-selection | explicit-user-approval
+    revision: integer
+```
+
+Compare efforts in this order: `none < minimal < low < medium < high < xhigh < max < ultra`.
+
+Only these profiles avoid an additional model-profile authorization:
+
+- `gpt-5.6-luna` with an effort below `max`;
+- `gpt-5.6-sol` with an effort below `medium`.
+
+Every other model-effort profile requires explicit user approval. The user may approve it in the same decision as the dedicated task or worker action. A model profile selected by the user in the UI authorizes only the current main thread; do not transfer it to a dedicated task or worker. The whitelist waives only the extra profile approval, never an action approval otherwise required for delegation.
+
+Validate the exact profile against the target host before execution. If unsupported, stop and request a supported choice; never substitute silently. Treat any model or effort change as a new profile requiring a higher authorization revision. Do not select `ultra` unless the user also authorizes any additional agent behavior it may enable.
+
+Prefer these execution modes:
+
+- **Main agent:** Read-only work, small changes, or tightly coupled critical-path work the current agent can safely verify.
+- **Dedicated Codex task:** Default for a coherent development outcome that benefits from isolated context, a worktree, long-running execution, or parallelism.
+- **`luna-worker`:** Short, bounded, low- or medium-risk side work whose result can be summarized.
+- **`sol-worker`:** Short but complex, architectural, cross-protocol, security-critical, or otherwise high-risk side work.
+- **`wenhao-skills:code-review`:** Stable review workflow owned by the current task thread after implementation and validation. Treat it as an opaque authorized workflow, not as a model-profile execution mode controlled by this skill.
+
+Read [references/dedicated-thread-protocol.md](references/dedicated-thread-protocol.md) before recommending or coordinating a dedicated task. Use its task-fit guidance and authorization gate for every mode. Treat worker names as roles and explicitly pass the selected model and reasoning effort; do not rely on static agent defaults.
+
+Respect more specific project instructions. If they require delegation or review, explain the requirement and request authorization; do not bypass the gate.
 
 ## Request authorization
 
-For each recommended action, state:
+For every recommendation, state:
 
-- the exact worker or skill;
-- the reason and expected benefit;
-- the bounded task or review scope;
-- known persistent effects such as a branch, worktree, or commit;
+- execution mode, exact model, reasoning effort, and selection basis;
+- whether the profile needs approval, its authorization source, and revision;
+- bounded task or review scope;
+- expected benefit and the consequence of declining;
+- persistent effects such as a task, worktree, branch, or commit;
 - explicit exclusions such as push, pull request, merge, production, device, or irreversible actions;
-- the main consequence of declining;
 - a direct authorization question.
 
-Offer main-agent execution when it remains safe. Keep these permissions independent unless the user explicitly approves them together:
+For dedicated development tasks, request these permissions together but separately selectable:
 
-- using `luna-worker` or `sol-worker` for the stated task;
-- invoking `wenhao-skills:code-review` for the stated review.
+1. create and run the dedicated task with the stated model, effort, scope, and side effects;
+2. let that task owner invoke `wenhao-skills:code-review` after implementation and validation.
 
-Disclose that `wenhao-skills:code-review` uses sub-agents. Let that skill control its own prerequisites, process, and report; do not redefine them here.
+Keep dedicated-task, worker, and review permissions independent unless the user explicitly approves them together. Disclose that `wenhao-skills:code-review` uses sub-agents under its own stable process. Do not inject, constrain, or redefine reviewer models or reasoning effort from this skill.
 
 ## Interpret authorization
 
-- Treat invoking `call-worker`, including explicit `$call-worker` use, as evaluation only.
-- Treat clear natural-language approval that identifies the action and scope as authorization; do not ask twice.
-- Do not infer authorization from general requests such as “finish,” “implement,” “fix,” or “continue.”
+- Treat invoking `call-worker`, including `$call-worker`, as evaluation only.
+- Treat clear natural-language approval identifying the action and scope as authorization; do not ask twice.
+- Treat a user-selected current UI profile as authorization only for the current main thread.
+- Do not infer authorization from “finish,” “implement,” “fix,” or “continue.”
 - Do not reuse authorization from another task.
-- Ask again if the scope, worker, review target, side effects, or risk materially changes.
+- Ask again if scope, execution mode, model, reasoning effort, review target, side effects, or risk materially changes.
 - Never extend authorization to push, pull request, merge, production, device, irreversible, or out-of-scope actions.
 
 ## Execute
 
 After authorization, perform only the approved action and scope.
 
-- For worker execution, provide the minimum task-local context and preserve all project gates.
-- For review, use `wenhao-skills:code-review` and follow its `SKILL.md` completely.
-- Report what was authorized, what ran, and any remaining boundary or blocker.
+- For a dedicated task, follow the dedicated-thread protocol and give the task owner the authorization envelope.
+- For a worker, explicitly pass the selected model and reasoning effort with minimum task-local context.
+- For review, let the current task owner use the unchanged `wenhao-skills:code-review` and follow its `SKILL.md` completely. The review authorization covers invoking that stable workflow; do not attach reviewer execution profiles.
+- Report the execution mode, model, effort, authorization, stable task identity, and remaining blocker.

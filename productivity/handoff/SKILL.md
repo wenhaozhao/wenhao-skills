@@ -10,9 +10,21 @@ Use this skill only at a session boundary. While the current session can continu
 Maintain one active long-running task per worktree using these repository-local files:
 
 - `<repo>/.ai/PROJECT_STATUS.md` for durable task state
-- `<repo>/.ai/HANDOFF.md` for session-boundary context
+- `<repo>/.ai/handoff_<branch>_<task-slug>_<yyyyMMddHHmmss>.md` for session-boundary context
 
 Resolve `<repo>` with `git rev-parse --show-toplevel`. Never save the handoff document in the operating system's temporary directory.
+
+## Name the handoff file
+
+Use this exact pattern:
+
+```text
+handoff_<branch>_<task-slug>_<yyyyMMddHHmmss>.md
+```
+
+Normalize the branch for a filename by replacing `/`, `\\`, and whitespace with `-`. For a detached HEAD, use `detached-<short-head>`. Keep the task slug short, lowercase, and hyphenated. Do not include personal names, absolute paths, or additional suffixes.
+
+Each `prepare` operation creates a new handoff file; never overwrite an earlier handoff. During `resume`, read the handoff file explicitly supplied by the user. If none is supplied, select the latest matching file only when branch and task matching are unambiguous.
 
 ## Select the phase
 
@@ -42,15 +54,15 @@ Never stash, commit, reset, clean, delete, or otherwise alter pre-existing works
 
 ## Establish the storage policy
 
-Before writing either `.ai` file, determine how each path can be updated while leaving Git clean:
+Before writing `.ai/PROJECT_STATUS.md` or a generated handoff file, determine how each path can be updated while leaving Git clean:
 
 - If a path is ignored by Git, it may be updated without creating worktree changes.
-- If a path is tracked and its content must change, obtain explicit user authorization for a dedicated handoff commit before writing. Stage and commit only `.ai/PROJECT_STATUS.md` and `.ai/HANDOFF.md`.
+- If a path is tracked and its content must change, obtain explicit user authorization for a dedicated handoff commit before writing. Stage and commit only `.ai/PROJECT_STATUS.md` and the generated handoff file.
 - If a path is untracked and not ignored, stop before writing and ask the user to choose whether the handoff artifacts should be ignored or tracked and committed.
 
 Do not silently modify `.gitignore`, Git exclude rules, the index, or commit history to satisfy the cleanliness requirement.
 
-Before writing, preserve the prior contents and existence state of both handoff files so changes created by this run can be rolled back if finalization fails. Never roll back unrelated paths.
+Before writing, preserve the prior contents and existence state of every file this run will change so generated changes can be rolled back if finalization fails. Never roll back unrelated paths.
 
 ## Evidence rules
 
@@ -74,8 +86,8 @@ Do not run new implementation work during handoff preparation. Run additional ve
 2. Establish a storage policy that can end clean.
 3. Inspect the clean repository state and verification already performed during the session.
 4. Create or reconcile `.ai/PROJECT_STATUS.md`.
-5. Create or replace `.ai/HANDOFF.md`.
-6. If either changed file is tracked, create the explicitly authorized handoff commit containing only the two allowed `.ai` paths.
+5. Create the newly named handoff file.
+6. If either changed file is tracked, create the explicitly authorized handoff commit containing only `.ai/PROJECT_STATUS.md` and the generated handoff path.
 7. Run `git status --porcelain=v1 --untracked-files=all` again from the repository root.
 
 Treat `prepare` as successful only when the final status output is empty.
@@ -84,7 +96,7 @@ If final status is not clean, do not report a completed handoff. Restore only ha
 
 On success, report:
 
-- the absolute paths of both handoff files;
+- the absolute paths of `.ai/PROJECT_STATUS.md` and the generated handoff file;
 - the recorded branch and HEAD;
 - the handoff commit hash, if a commit was created;
 - confirmation that the final worktree is clean.
@@ -130,7 +142,7 @@ Keep it concise:
 
 ### Session handoff
 
-Use this structure for `.ai/HANDOFF.md`:
+Use this structure for the generated handoff file:
 
 ```markdown
 # Session Handoff
@@ -157,12 +169,12 @@ Include only information that would otherwise be lost at the session boundary. D
 ## Resume
 
 1. Pass the clean-worktree gate before consuming the handoff.
-2. Read `.ai/PROJECT_STATUS.md` and `.ai/HANDOFF.md` from the repository root.
+2. Read `.ai/PROJECT_STATUS.md` and the selected handoff file from the repository root.
 3. Compare the current branch and HEAD with the recorded workspace baseline.
 4. Reconcile material conflicts before editing.
 5. Briefly report the recovered objective, current clean workspace condition, and important discrepancies.
 6. Identify the first executable next action and continue within the user's existing authorization.
 
-Stop if either handoff file is missing or the worktree is dirty. Do not recreate the previous conversation. Do not re-investigate settled decisions unless current evidence conflicts with them. Do not repeat a failed approach unless its retry condition is satisfied or new evidence justifies it.
+Stop if `.ai/PROJECT_STATUS.md` or the selected handoff file is missing, or if the worktree is dirty. Do not recreate the previous conversation. Do not re-investigate settled decisions unless current evidence conflicts with them. Do not repeat a failed approach unless its retry condition is satisfied or new evidence justifies it.
 
 After resuming, rely on the new conversation context. Normal authorized work may then change the workspace; the final-clean requirement applies to the completed `prepare` phase, not to subsequent implementation. Do not update the handoff files again until another session switch is requested.

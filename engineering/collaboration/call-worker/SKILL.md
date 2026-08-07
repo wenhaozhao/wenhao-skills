@@ -1,6 +1,6 @@
 ---
 name: call-worker
-description: Choose the execution mode, model, and reasoning effort for a task; assess whether work should stay with the main agent, move to a dedicated Codex task, use luna-worker or sol-worker, or invoke wenhao-skills:code-review; request explicit user authorization before delegation or review; and execute only the approved scope. Use when the main agent recommends delegation or formal review, or when the user invokes call-worker to evaluate those options. Invoking this skill alone is not authorization.
+description: Choose the execution mode, model, and reasoning effort for a task; assess whether work should stay with the main agent, move to a dedicated Codex task, use the portable luna-worker or sol-worker execution profile, or invoke wenhao-skills:code-review; request explicit user authorization before delegation or review; and execute only the approved scope. Use when the main agent recommends delegation or formal review, or when the user invokes call-worker to evaluate those options. Invoking this skill alone is not authorization.
 ---
 
 # Call Worker
@@ -51,6 +51,15 @@ Prefer these execution modes:
 - **`sol-worker`:** Short but complex, architectural, cross-protocol, security-critical, or otherwise high-risk side work.
 - **`wenhao-skills:code-review`:** Stable review workflow owned by the current task thread after implementation and validation. Treat it as an opaque authorized workflow, not as a model-profile execution mode controlled by this skill.
 
+Treat `luna-worker` and `sol-worker` as portable logical execution profiles, not custom-agent names that must exist in `~/.codex/agents/` or `.codex/agents/`. Spawn Codex's built-in `worker` and explicitly pass the selected model, reasoning effort, bounded task instructions, and authorization envelope:
+
+| Logical profile | Base agent | Required model |
+| --- | --- | --- |
+| `luna-worker` | built-in `worker` | `gpt-5.6-luna` |
+| `sol-worker` | built-in `worker` | `gpt-5.6-sol` |
+
+Do not read, install, require, or rely on same-named local custom-agent files. Validate that the target host exposes the built-in worker capability and supports the exact model-effort combination before requesting or executing delegation. If either capability is unavailable, return `UNSUPPORTED_EXECUTION_PROFILE` and request a new choice; never fall back to another agent, model, or effort silently.
+
 Read [references/dedicated-thread-protocol.md](references/dedicated-thread-protocol.md) before recommending or coordinating a dedicated task. Use its task-fit guidance and authorization gate for every mode. Treat worker names as roles and explicitly pass the selected model and reasoning effort; do not rely on static agent defaults.
 
 Respect more specific project instructions. If they require delegation or review, explain the requirement and request authorization; do not bypass the gate.
@@ -89,6 +98,6 @@ Keep dedicated-task, worker, and review permissions independent unless the user 
 After authorization, perform only the approved action and scope.
 
 - For a dedicated task, follow the dedicated-thread protocol and give the task owner the authorization envelope.
-- For a worker, explicitly pass the selected model and reasoning effort with minimum task-local context.
+- For a worker, spawn the built-in `worker` under the approved logical profile and explicitly pass the selected model, reasoning effort, minimum task-local context, and authorization envelope. Do not address or depend on a same-named custom agent.
 - For review, let the current task owner use the unchanged `wenhao-skills:code-review` and follow its `SKILL.md` completely. The review authorization covers invoking that stable workflow; do not attach reviewer execution profiles.
 - Report the execution mode, model, effort, authorization, stable task identity, and remaining blocker.

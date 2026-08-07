@@ -2,6 +2,8 @@
 
 Use this protocol for every dedicated Codex development task.
 
+`luna-worker` and `sol-worker` are portable logical profiles owned by `call-worker`. They use Codex's built-in `worker` with an explicitly supplied model and reasoning effort; they never require same-named files under `~/.codex/agents/` or `.codex/agents/`.
+
 ## Select model, effort, and authorization
 
 First choose the lowest-cost profile that safely fits the task:
@@ -44,6 +46,8 @@ execution_profile:
 ```
 
 Validate the exact profile on the destination host. Do not silently substitute an unsupported combination. Any later model or effort change requires a higher authorization revision. Use `ultra` only when the user also authorizes any additional agent behavior it may enable.
+
+For a logical worker profile, also verify that the destination host exposes the built-in `worker` capability. If the capability or exact model-effort combination is unavailable, return `UNSUPPORTED_EXECUTION_PROFILE` and request a new choice before delegation.
 
 ## Create and identify the task
 
